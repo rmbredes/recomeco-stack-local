@@ -13,7 +13,7 @@ C:\Recomeco\projetos\
 ├── ProjetoSpringBoot
 ├── pagamento-service
 ├── logistica-service
-└└── recomeco-stack-local
+└── recomeco-stack-local
 ```
 
 ## Aplicações
@@ -72,36 +72,38 @@ Amazon SNS
 
 O Amazon RDS não precisa estar ligado. As aplicações usam PostgreSQL em containers.
 
-## Preparar credenciais AWS
+## Credenciais AWS
 
-Se a sessão estiver expirada:
+O script `start-stack.ps1` usa a AWS CLI para exportar automaticamente as
+credenciais temporárias do perfil `projeto-s3`. Se a sessão estiver ausente ou
+expirada, o próprio script executa `aws login --profile default` e aguarda a
+autenticação pelo navegador.
+
+Os valores das credenciais não são exibidos, gravados no projeto ou armazenados
+na imagem Docker.
+
+Internamente, o script executa o equivalente a:
 
 ```powershell
-aws login --profile default
+aws configure export-credentials --profile projeto-s3 --format process
 ```
 
-Carregue as credenciais temporárias no PowerShell:
-
-```powershell
-$awsCredentials = aws configure export-credentials `
-    --profile projeto-s3 `
-    --format process |
-    ConvertFrom-Json
-
-$env:AWS_ACCESS_KEY_ID = $awsCredentials.AccessKeyId
-$env:AWS_SECRET_ACCESS_KEY = $awsCredentials.SecretAccessKey
-$env:AWS_SESSION_TOKEN = $awsCredentials.SessionToken
-```
-
-As credenciais existem somente na janela atual do PowerShell e não são armazenadas no Git.
+Quando as credenciais temporárias expirarem, renove o login e execute novamente
+o script. O container do monólito será recriado com as novas credenciais.
 
 ## Subir a stack
 
-Na mesma janela em que as credenciais foram carregadas:
+Execute a partir da pasta do orquestrador:
 
 ```powershell
 cd C:\Recomeco\projetos\recomeco-stack-local
-docker compose up -d --build
+.\start-stack.ps1
+```
+
+Por padrão, o script utiliza o perfil `projeto-s3`. Outro perfil pode ser informado:
+
+```powershell
+.\start-stack.ps1 -AwsProfile outro-perfil -LoginProfile outro-login
 ```
 
 ## Consultar os containers
@@ -113,7 +115,7 @@ docker compose ps
 ## Parar a stack
 
 ```powershell
-docker compose down
+.\stop-stack.ps1
 ```
 
 Não use `-v`, a menos que queira apagar permanentemente os bancos e os demais volumes.
