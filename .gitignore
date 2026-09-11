@@ -1,0 +1,10 @@
+# Variáveis locais e credenciais temporárias.
+.env
+
+# Configurações locais das IDEs.
+.idea/
+.vscode/
+
+# Arquivos de log.
+*.log
+logs/

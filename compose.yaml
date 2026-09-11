@@ -1,0 +1,14 @@
+# Nome do projeto que representa todo o laboratório local.
+name: recomeco-stack-local
+
+include:
+
+  # Monólito e infraestrutura compartilhada:
+  # Kafka, Redis, Keycloak, observabilidade etc.
+  - path: ../ProjetoSpringBoot/compose.yaml
+
+  # Microserviço de pagamentos e seu PostgreSQL.
+  - path: ../pagamento-service/compose.yaml
+  
+    # Microserviço de logística e seu PostgreSQL.
+  - path: ../logistica-service/compose.yaml
