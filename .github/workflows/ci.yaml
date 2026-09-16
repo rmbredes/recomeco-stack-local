@@ -1,0 +1,71 @@
+# Valida se os arquivos Compose dos quatro repositórios
+# continuam formando uma única stack coerente.
+name: CI - Docker Compose
+
+on:
+
+  # Confirma novamente a stack após o merge.
+  push:
+    branches:
+      - master
+
+  # Valida a stack antes de aceitar alterações na master.
+  pull_request:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+
+  validar-compose:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # Baixa o repositório orquestrador.
+      #
+      # Usamos um diretório explícito porque os outros três
+      # repositórios precisam ficar ao lado dele.
+      - name: Baixar recomeco-stack-local
+        uses: actions/checkout@v6
+        with:
+          path: recomeco-stack-local
+
+      # Baixa o monólito como irmão do repositório central.
+      - name: Baixar ProjetoSpringBoot
+        uses: actions/checkout@v6
+        with:
+          repository: rmbredes/ProjetoSpringBoot
+          path: ProjetoSpringBoot
+
+      # Baixa o primeiro microserviço.
+      - name: Baixar pagamento-service
+        uses: actions/checkout@v6
+        with:
+          repository: rmbredes/pagamento-service
+          path: pagamento-service
+
+      # Baixa o segundo microserviço.
+      - name: Baixar logistica-service
+        uses: actions/checkout@v6
+        with:
+          repository: rmbredes/logistica-service
+          path: logistica-service
+
+      # Registra no log qual versão do Compose existe no runner.
+      - name: Exibir versão do Docker Compose
+        run: docker compose version
+
+      # Valida sintaxe, includes, redes, volumes e dependências.
+      #
+      # --quiet evita imprimir o enorme YAML normalizado.
+      - name: Validar configuração da stack
+        working-directory: recomeco-stack-local
+        run: docker compose config --quiet
+
+      # Mostra os serviços reconhecidos para facilitar a conferência.
+      - name: Listar serviços da stack
+        working-directory: recomeco-stack-local
+        run: docker compose config --services
