@@ -1,0 +1,31 @@
+{
+  "realm": "recomeco",
+  "displayName": "Recomeço - Ambiente Local",
+  "enabled": true,
+
+  "registrationAllowed": false,
+  "resetPasswordAllowed": false,
+  "rememberMe": false,
+
+  "clients": [
+    {
+      "clientId": "projeto-springboot-logistica",
+      "name": "ProjetoSpringBoot para Logística",
+      "description": "Cliente técnico usado pelo monólito para chamar o logistica-service.",
+
+      "enabled": true,
+      "protocol": "openid-connect",
+
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+
+      "secret": "segredo-local-projeto-springboot-logistica",
+
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+
+      "serviceAccountsEnabled": true
+    }
+  ]
+}
