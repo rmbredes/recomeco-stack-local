@@ -1,0 +1,142 @@
+# Nome fixo do projeto Compose.
+#
+# Isso mantém os nomes das redes e volumes iguais,
+# independentemente da pasta em que o arquivo for executado.
+name: recomeco-pagamento
+
+
+services:
+
+  pagamento-service:
+    # Imagem construída pelo CI/CD e armazenada no Amazon ECR.
+    image: 033649548808.dkr.ecr.sa-east-1.amazonaws.com/recomeco/pagamento-service:latest
+
+    container_name: pagamento-service-ec2
+
+    environment:
+      # O Docker resolve pagamento-postgres pelo DNS interno.
+      DB_URL: jdbc:postgresql://pagamento-postgres:5432/pagamentodb
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+
+      SERVER_PORT: 8081
+
+      # O Docker resolve kafka pelo DNS interno.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+      # Ativa o consumidor de pedidos criados.
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: "true"
+
+      # Limita a memória da JVM na pequena EC2.
+      JAVA_TOOL_OPTIONS: "-Xms128m -Xmx384m"
+
+    ports:
+      - "8081:8081"
+
+    depends_on:
+      pagamento-postgres:
+        condition: service_healthy
+
+      kafka:
+        condition: service_healthy
+
+    restart: unless-stopped
+
+    # Impede que os logs ocupem todo o disco.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  pagamento-postgres:
+    image: postgres:17
+
+    container_name: pagamento-postgres-ec2
+
+    environment:
+      POSTGRES_DB: pagamentodb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    volumes:
+      - pagamento-postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pagamentodb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  kafka:
+    # Mesma versão utilizada no ambiente local.
+    image: apache/kafka:4.3.1
+
+    container_name: kafka-ec2
+
+    hostname: kafka
+
+    environment:
+      # Um único nó exerce os papéis de broker e controller.
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+
+      # Somente comunicação interna entre containers.
+      KAFKA_LISTENERS: CONTROLLER://:29093,INTERNAL://:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092
+
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+
+      # Configuração adequada para um cluster educacional de um nó.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+
+      # Limita o heap do Kafka na EC2 de 2 GB.
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx384m"
+
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 >/dev/null 2>&1
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+volumes:
+
+  # Estes nomes lógicos geram os mesmos volumes já existentes na EC2,
+  # porque o nome fixo do projeto é recomeco-pagamento.
+  pagamento-postgres-data:
+  kafka-data:
