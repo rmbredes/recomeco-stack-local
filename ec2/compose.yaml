@@ -189,6 +189,39 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  keycloak:
+    # Servidor de identidade utilizado na comunicação
+    # entre o monólito e o logistica-service.
+    image: quay.io/keycloak/keycloak:26.7.0
+
+    container_name: keycloak-ec2
+
+    # Inicia em modo de desenvolvimento e importa o realm.
+    command: start-dev --import-realm
+
+    environment:
+      # Administrador didático do Console Keycloak.
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+
+      # Limita a memória da JVM na EC2.
+      JAVA_OPTS_APPEND: "-Xms256m -Xmx512m"
+
+    ports:
+      # Porta da EC2 : porta interna do Keycloak.
+      - "8085:8080"
+
+    volumes:
+      # O Keycloak pode ler o realm, mas não modificar o arquivo.
+      - ./keycloak/recomeco-realm.json:/opt/keycloak/data/import/recomeco-realm.json:ro
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
 

@@ -22,6 +22,7 @@ Docker Compose
    │      └── logistica-postgres:5432
    │
    └── kafka:29092
+   ├── keycloak:8085
 ```
 
 Os bancos PostgreSQL e o Kafka não possuem portas publicadas para a internet.
@@ -222,6 +223,52 @@ python3 -m json.tool
 Os demais endpoints permanecem protegidos por OAuth2/JWT.
 
 O Keycloak será adicionado numa etapa posterior.
+
+## Keycloak na EC2
+
+O Keycloak fornece identidade e tokens OAuth2/JWT para a comunicação
+entre o monólito e o logistica-service.
+
+```text
+monólito
+    ↓ client_credentials
+Keycloak
+    ↓ access token JWT
+monólito
+    ↓ Bearer Token
+logistica-service
+```
+
+O realm importado é:
+
+```text
+recomeco
+```
+
+O cliente técnico é:
+
+```text
+projeto-springboot-logistica
+```
+
+A interface administrativa ficará disponível na porta `8085`.
+
+```text
+EC2:8085 → Keycloak:8080
+```
+
+Durante o laboratório, a porta `8085` deve ser liberada no Security Group
+somente para o IP do desenvolvedor.
+
+O usuário administrativo didático é:
+
+```text
+usuário: admin
+senha:   admin
+```
+
+Essas credenciais são utilizadas somente no ambiente de estudos.
+
 
 ## Consultar logs do pagamento-service
 
