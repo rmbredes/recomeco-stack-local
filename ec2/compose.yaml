@@ -200,9 +200,9 @@ services:
       SPRING_PROFILES_ACTIVE: docker
 
       # Banco exclusivo do monólito.
-      DB_URL: jdbc:postgresql://monolito-postgres:5432/projetodb
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://monolito-postgres:5432/projetodb
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
 
       # Serviços acessados pelos nomes internos do Compose.
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
