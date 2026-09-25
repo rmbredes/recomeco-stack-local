@@ -189,6 +189,134 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  projeto-springboot:
+    # Imagem construída pelo CI/CD e armazenada no Amazon ECR.
+    image: 033649548808.dkr.ecr.sa-east-1.amazonaws.com/recomeco/projeto-springboot:latest
+
+    container_name: projeto-springboot-ec2
+
+    environment:
+      # Ativa as configurações destinadas à execução em containers.
+      SPRING_PROFILES_ACTIVE: docker
+
+      # Banco exclusivo do monólito.
+      DB_URL: jdbc:postgresql://monolito-postgres:5432/projetodb
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+
+      # Serviços acessados pelos nomes internos do Compose.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      LOGISTICA_BASE_URL: http://logistica-service:8084
+      KEYCLOAK_TOKEN_URI: http://keycloak:8080/realms/recomeco/protocol/openid-connect/token
+
+      SERVER_PORT: 8080
+
+      # A primeira validação será somente do fluxo local:
+      # monólito, Kafka, pagamentos, Keycloak e logística.
+      APPLICATION_AWS_SQS_ENABLED: "false"
+      APPLICATION_AWS_SQS_CONSUMER_ENABLED: "false"
+      APPLICATION_AWS_SQS_AUDIT_CONSUMER_ENABLED: "false"
+      APPLICATION_AWS_SNS_ENABLED: "false"
+
+      # Evita procurar o perfil projeto-s3, que existe somente
+      # no computador Windows.
+      APPLICATION_AWS_S3_CREDENTIALS_PROFILE: ""
+      APPLICATION_AWS_SQS_CREDENTIALS_PROFILE: ""
+      APPLICATION_AWS_SNS_CREDENTIALS_PROFILE: ""
+
+      # O Jaeger ainda não faz parte deste ambiente EC2.
+      MANAGEMENT_TRACING_EXPORT_OTLP_ENABLED: "false"
+
+      # O perfil Docker exibe SQL detalhado para estudo local.
+      # Na EC2 reduzimos esses logs para não ocupar o disco novamente.
+      LOGGING_LEVEL_ORG_HIBERNATE_SQL: WARN
+      LOGGING_LEVEL_ORG_HIBERNATE_ORM_JDBC_BIND: WARN
+
+      # Desliga o arquivo interno e mantém os logs no console.
+      # O Docker já aplica rotação aos logs do container.
+      LOGGING_FILE_NAME: ""
+
+      # Limite inicial confortável para a JVM do monólito.
+      JAVA_TOOL_OPTIONS: "-Xms256m -Xmx768m"
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      monolito-postgres:
+        condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
+      kafka:
+        condition: service_healthy
+
+      keycloak:
+        condition: service_started
+
+      logistica-service:
+        condition: service_started
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  monolito-postgres:
+    # Banco exclusivo do ProjetoSpringBoot.
+    image: postgres:17
+
+    container_name: monolito-postgres-ec2
+
+    environment:
+      POSTGRES_DB: projetodb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    volumes:
+      # Preserva os dados mesmo quando o container for recriado.
+      - monolito-postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      # O container somente será considerado saudável
+      # quando o banco estiver aceitando conexões.
+      test: ["CMD-SHELL", "pg_isready -U postgres -d projetodb"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  redis:
+    # Cache utilizado pelo ProjetoSpringBoot.
+    image: redis:7
+
+    container_name: redis-ec2
+
+    healthcheck:
+      # O comando deve responder PONG quando o Redis estiver pronto.
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+    restart: unless-stopped
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   keycloak:
     # Servidor de identidade utilizado na comunicação
     # entre o monólito e o logistica-service.
@@ -228,3 +356,4 @@ volumes:
   pagamento-postgres-data:
   kafka-data:
   logistica-postgres-data:
+  monolito-postgres-data:
