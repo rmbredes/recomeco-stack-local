@@ -211,12 +211,17 @@ services:
 
       SERVER_PORT: 8080
 
-      # A primeira validação será somente do fluxo local:
-      # monólito, Kafka, pagamentos, Keycloak e logística.
-      APPLICATION_AWS_SQS_ENABLED: "false"
-      APPLICATION_AWS_SQS_CONSUMER_ENABLED: "false"
-      APPLICATION_AWS_SQS_AUDIT_CONSUMER_ENABLED: "false"
-      APPLICATION_AWS_SNS_ENABLED: "false"
+      # Liga o envio de solicitações de relatório ao SQS.
+      APPLICATION_AWS_SQS_ENABLED: "true"
+      
+      # Liga o consumidor que gera o PDF e o envia ao S3.
+      APPLICATION_AWS_SQS_CONSUMER_ENABLED: "true"
+
+      # Liga o consumidor da fila de auditoria alimentada pelo SNS.
+      APPLICATION_AWS_SQS_AUDIT_CONSUMER_ENABLED: "true"
+
+      # Liga a publicação dos eventos de relatório disponível.
+      APPLICATION_AWS_SNS_ENABLED: "true"
 
       # Evita procurar o perfil projeto-s3, que existe somente
       # no computador Windows.
