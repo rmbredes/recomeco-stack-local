@@ -1,0 +1,169 @@
+# Implanta na EC2 a stack já validada e publicada nos registros de imagens.
+name: CD - Implantar na EC2
+
+on:
+
+  # Exibe o botão "Run workflow" na interface do GitHub Actions.
+  #
+  # A implantação não ocorrerá automaticamente após cada merge.
+  workflow_dispatch:
+
+# Permissões entregues ao workflow pelo GitHub.
+permissions:
+
+  # Permite baixar ou consultar o conteúdo do repositório.
+  contents: read
+
+  # Permite solicitar ao GitHub o token OIDC usado para assumir a role AWS.
+  id-token: write
+
+env:
+
+  # Região onde estão a EC2, o ECR e o Systems Manager.
+  AWS_REGION: sa-east-1
+
+  # Única instância autorizada pela política IAM.
+  EC2_INSTANCE_ID: i-01648a6baea82f779
+
+  # Role assumida temporariamente pelo GitHub.
+  AWS_ROLE_ARN: arn:aws:iam::033649548808:role/GitHubActionsEcrRecomecoRole
+
+jobs:
+
+  implantar:
+
+    # Utiliza uma máquina Linux temporária fornecida pelo GitHub.
+    runs-on: ubuntu-latest
+
+    # Impede implantação caso o workflow seja iniciado a partir
+    # de uma branch diferente da master.
+    if: github.ref == 'refs/heads/master'
+
+    steps:
+
+      # Troca o token OIDC do GitHub por credenciais temporárias da AWS.
+      - name: Autenticar na AWS por OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: recomeco-stack-deploy
+
+      # Envia um script à EC2 por meio do Systems Manager.
+      #
+      # O script é convertido para Base64 para preservar corretamente
+      # quebras de linha, aspas e caracteres especiais durante o envio.
+      - name: Enviar implantação pelo Systems Manager
+        id: enviar-comando
+        shell: bash
+        run: |
+          SCRIPT_IMPLANTACAO=$(cat <<'SCRIPT'
+          #!/usr/bin/env bash
+
+          # Encerra imediatamente em caso de erro,
+          # variável inexistente ou falha dentro de um pipe.
+          set -Eeuo pipefail
+
+          echo "Atualizando o repositório da stack..."
+
+          cd /home/ec2-user/recomeco-stack-local
+
+          git switch master
+          git pull --ff-only origin master
+
+          cd ec2
+
+          echo "Renovando a autenticação do Docker no Amazon ECR..."
+
+          aws ecr get-login-password \
+            --region sa-east-1 |
+          docker login \
+            --username AWS \
+            --password-stdin \
+            033649548808.dkr.ecr.sa-east-1.amazonaws.com
+
+          echo "Baixando as imagens declaradas no Compose..."
+
+          docker compose pull
+
+          echo "Aplicando a configuração..."
+
+          docker compose up \
+            -d \
+            --remove-orphans
+
+          echo "Estado final dos serviços:"
+
+          docker compose ps
+          SCRIPT
+          )
+
+          SCRIPT_BASE64=$(
+            printf '%s' "$SCRIPT_IMPLANTACAO" |
+            base64 --wrap=0
+          )
+
+          COMANDO_REMOTO="echo '$SCRIPT_BASE64' | base64 --decode > /tmp/recomeco-deploy.sh && chown ec2-user:ec2-user /tmp/recomeco-deploy.sh && chmod 700 /tmp/recomeco-deploy.sh && sudo -u ec2-user -H /tmp/recomeco-deploy.sh"
+
+          PARAMETROS=$(
+            jq \
+              -n \
+              --arg comando "$COMANDO_REMOTO" \
+              '{
+                commands: [$comando],
+                executionTimeout: ["900"]
+              }'
+          )
+
+          COMMAND_ID=$(
+            aws ssm send-command \
+              --instance-ids "${EC2_INSTANCE_ID}" \
+              --document-name "AWS-RunShellScript" \
+              --comment "Implantacao da stack Recomeco" \
+              --parameters "$PARAMETROS" \
+              --query "Command.CommandId" \
+              --output text
+          )
+
+          echo "Comando SSM criado: $COMMAND_ID"
+
+          echo "command_id=$COMMAND_ID" >> "$GITHUB_OUTPUT"
+
+      # Aguarda o término e publica a saída da EC2 no log do GitHub.
+      - name: Aguardar e validar implantação
+        shell: bash
+        run: |
+          COMMAND_ID="${{ steps.enviar-comando.outputs.command_id }}"
+
+          # O waiter termina com código diferente de zero quando
+          # o comando remoto falha. Permitimos continuar para que
+          # a saída detalhada ainda seja exibida abaixo.
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${EC2_INSTANCE_ID}" ||
+          true
+
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "${EC2_INSTANCE_ID}" \
+            --query '{
+              Status: Status,
+              Saida: StandardOutputContent,
+              Erro: StandardErrorContent
+            }' \
+            --output json
+
+          STATUS=$(
+            aws ssm get-command-invocation \
+              --command-id "$COMMAND_ID" \
+              --instance-id "${EC2_INSTANCE_ID}" \
+              --query "Status" \
+              --output text
+          )
+
+          if [ "$STATUS" != "Success" ]; then
+            echo "A implantação terminou com status: $STATUS"
+            exit 1
+          fi
+
+          echo "Implantação concluída com sucesso."
